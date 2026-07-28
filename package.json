@@ -1,0 +1,19 @@
+{
+  "name": "matrix-helper-card",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/matrix-helper-card.ts --bundle --minify --format=esm --outfile=dist/matrix-helper-card.js",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "lit": "^3.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
+    "eslint": "^9.13.0",
+    "typescript-eslint": "^8.11.0"
+  }
+}
