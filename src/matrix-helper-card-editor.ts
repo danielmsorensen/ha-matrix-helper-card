@@ -12,8 +12,8 @@ const INCLUDE_DOMAINS = [DOMAIN];
 
 // Restricts the Tap/Hold/Double-Tap pickers to a deliberately small set of
 // action types -- "Call a service" and the other ActionConfig variants are
-// still fully supported at runtime by handleAction()if hand-edited into the
-// card's YAML, this just isn't offered as an editor choice. This restriction
+// still fully supported at runtime by handleAction() if hand-edited into the
+// card's YAML -- this just isn't offered as an editor choice. This restriction
 // is a config option on the real ui_action selector, not something filtered
 // in our own code.
 const ACTION_SELECTOR = {
