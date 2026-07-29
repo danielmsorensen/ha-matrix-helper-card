@@ -99,6 +99,9 @@ export class MatrixHelperCard extends LitElement {
   }
 
   protected shouldUpdate(changedProps: PropertyValues): boolean {
+    if (!this.config) {
+      return true;
+    }
     return hasConfigOrEntityChanged(this, changedProps, false);
   }
 
@@ -144,7 +147,7 @@ export class MatrixHelperCard extends LitElement {
           hasDoubleClick: hasAction(this.config.double_tap_action),
         })}
       >
-        <ha-ripple></ha-ripple>
+        ${hasCardAction ? html`<ha-ripple></ha-ripple>` : nothing}
         <div style="padding: 0 16px 16px;">
           ${this._error
             ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
@@ -197,6 +200,8 @@ export class MatrixHelperCard extends LitElement {
                           @click=${(ev: Event) => ev.stopPropagation()}
                           @mousedown=${(ev: Event) => ev.stopPropagation()}
                           @touchstart=${(ev: Event) => ev.stopPropagation()}
+                          @touchend=${(ev: Event) => ev.stopPropagation()}
+                          @touchcancel=${(ev: Event) => ev.stopPropagation()}
                           @blur=${() => this._onCellBlur(row, column, committedValue)}
                         ></ha-textfield>
                       </td>`;
