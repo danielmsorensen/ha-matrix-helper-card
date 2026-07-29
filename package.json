@@ -8,7 +8,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "lit": "^3.2.0"
+    "lit": "^3.2.0",
+    "custom-card-helpers": "^2.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

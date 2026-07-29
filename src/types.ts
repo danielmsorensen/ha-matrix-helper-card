@@ -1,7 +1,8 @@
+import type { ActionConfig, LovelaceCardConfig } from "custom-card-helpers";
+
 export const DOMAIN = "matrix_helper";
 
-export interface HassEntity {
-  entity_id: string;
+export interface MatrixHelperStateObj {
   state: string;
   attributes: {
     friendly_name?: string;
@@ -12,19 +13,12 @@ export interface HassEntity {
   };
 }
 
-export interface HomeAssistant {
-  states: Record<string, HassEntity>;
-  callService: (
-    domain: string,
-    service: string,
-    serviceData: Record<string, unknown>
-  ) => Promise<unknown>;
-}
-
-export interface MatrixHelperCardConfig {
-  type: string;
+export interface MatrixHelperCardConfig extends LovelaceCardConfig {
   entity: string;
   title?: string;
+  tap_action?: ActionConfig;
+  hold_action?: ActionConfig;
+  double_tap_action?: ActionConfig;
 }
 
 // `ha-textfield` (and other Home Assistant/mwc custom elements) are not
