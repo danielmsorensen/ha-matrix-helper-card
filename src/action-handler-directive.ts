@@ -236,7 +236,7 @@ class ActionHandlerDirective extends Directive {
     super(partInfo);
   }
 
-  render() {
+  render(_options?: ActionHandlerOptions) {
     return undefined;
   }
 
