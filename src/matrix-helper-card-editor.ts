@@ -22,6 +22,17 @@ const ACTION_SELECTOR = {
   },
 } as const;
 
+// Same reasoning as INCLUDE_DOMAINS above: a stable reference so the title
+// field's selector isn't a new object literal on every render.
+const TITLE_SELECTOR = { text: {} } as const;
+
+// Tap Action defaults to "more-info" at runtime when left unset (see
+// MatrixHelperCard.render()'s hasCardAction / handleAction default), but the
+// ui_action selector type shipped with the installed custom-card-helpers/HA
+// frontend here doesn't expose a confirmed `default_action` (or equivalent)
+// option to reflect that in the picker UI, so the Tap Action field below
+// shows no explicit default even though runtime behavior defaults to more-info.
+
 @customElement("matrix-helper-card-editor")
 export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEditor {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -67,7 +78,7 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
           ></ha-entity-picker>
           <ha-selector
             .hass=${this.hass}
-            .selector=${{ text: {} }}
+            .selector=${TITLE_SELECTOR}
             .value=${this._config.title ?? ""}
             label="Title (optional)"
             @value-changed=${this._titleChanged}

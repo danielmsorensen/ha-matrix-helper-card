@@ -1,5 +1,6 @@
-import { LitElement, html, css, PropertyValues } from "lit";
+import { LitElement, html, css, nothing, PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
 import {
   HomeAssistant,
   ActionHandlerEvent,
@@ -19,7 +20,7 @@ import "./matrix-helper-card-editor";
 export class MatrixHelperCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
-  @state() private _config?: MatrixHelperCardConfig;
+  @state() private config?: MatrixHelperCardConfig;
 
   @state() private _error?: string;
 
@@ -39,6 +40,8 @@ export class MatrixHelperCard extends LitElement {
   static styles = css`
     ha-card {
       position: relative;
+    }
+    ha-card.pointer {
       cursor: pointer;
     }
     table {
@@ -58,6 +61,9 @@ export class MatrixHelperCard extends LitElement {
     td:first-child {
       text-align: left;
     }
+    ha-textfield.cell {
+      width: 96px;
+    }
   `;
 
   public connectedCallback(): void {
@@ -73,7 +79,7 @@ export class MatrixHelperCard extends LitElement {
         `"entity" is required and must be a ${DOMAIN} entity (e.g. ${DOMAIN}.climate_profiles).`
       );
     }
-    this._config = config;
+    this.config = config;
     this._drafts.clear();
     this._confirmed.clear();
     this._error = undefined;
@@ -97,33 +103,45 @@ export class MatrixHelperCard extends LitElement {
   }
 
   protected render() {
-    if (!this._config || !this.hass) {
+    if (!this.config || !this.hass) {
       return html``;
     }
-    const stateObj = this.hass.states[this._config.entity] as
+    const stateObj = this.hass.states[this.config.entity] as
       | MatrixHelperStateObj
       | undefined;
     if (!stateObj) {
       return html`<ha-card>
-        <div style="padding: 16px;">Entity ${this._config.entity} not found.</div>
+        <div style="padding: 16px;">Entity ${this.config.entity} not found.</div>
       </ha-card>`;
     }
 
     const { rows, columns, data } = stateObj.attributes;
     if (stateObj.state === "unavailable" || !rows || !columns || !data) {
       return html`<ha-card>
-        <div style="padding: 16px;">Entity ${this._config.entity} is unavailable.</div>
+        <div style="padding: 16px;">Entity ${this.config.entity} is unavailable.</div>
       </ha-card>`;
     }
-    const title = this._config.title ?? stateObj.attributes.friendly_name;
+    const title = this.config.title ?? stateObj.attributes.friendly_name;
+
+    // tap defaults to "more-info" when unset, so an unset tap_action still
+    // counts as "has an action"; hold/double-tap have no default action, so
+    // only an explicit, non-"none" config counts for those.
+    const hasCardAction =
+      this.config.tap_action === undefined ||
+      hasAction(this.config.tap_action) ||
+      hasAction(this.config.hold_action) ||
+      hasAction(this.config.double_tap_action);
 
     return html`
       <ha-card
         .header=${title}
+        class=${classMap({ pointer: hasCardAction })}
+        tabindex=${hasCardAction ? "0" : nothing}
+        role=${hasCardAction ? "button" : nothing}
         @action=${this._handleAction}
         ${actionHandler({
-          hasHold: hasAction(this._config.hold_action),
-          hasDoubleClick: hasAction(this._config.double_tap_action),
+          hasHold: hasAction(this.config.hold_action),
+          hasDoubleClick: hasAction(this.config.double_tap_action),
         })}
       >
         <ha-ripple></ha-ripple>
@@ -171,10 +189,14 @@ export class MatrixHelperCard extends LitElement {
                             this.requestUpdate();
                           }}
                           @keydown=${(ev: KeyboardEvent) => {
+                            ev.stopPropagation();
                             if (ev.key === "Enter") {
                               (ev.target as HTMLInputElement).blur();
                             }
                           }}
+                          @click=${(ev: Event) => ev.stopPropagation()}
+                          @mousedown=${(ev: Event) => ev.stopPropagation()}
+                          @touchstart=${(ev: Event) => ev.stopPropagation()}
                           @blur=${() => this._onCellBlur(row, column, committedValue)}
                         ></ha-textfield>
                       </td>`;
@@ -190,8 +212,8 @@ export class MatrixHelperCard extends LitElement {
   }
 
   private _handleAction(ev: ActionHandlerEvent): void {
-    if (this.hass && this._config) {
-      handleAction(this, this.hass, this._config, ev.detail.action);
+    if (this.hass && this.config) {
+      handleAction(this, this.hass, this.config, ev.detail.action);
     }
   }
 
@@ -231,13 +253,13 @@ export class MatrixHelperCard extends LitElement {
       return;
     }
 
-    if (!this.hass || !this._config) {
+    if (!this.hass || !this.config) {
       this._drafts.delete(cellKey);
       return;
     }
 
     const serviceData: Record<string, unknown> = {
-      entity_id: this._config.entity,
+      entity_id: this.config.entity,
       row,
       column,
     };
