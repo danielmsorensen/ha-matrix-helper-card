@@ -245,7 +245,7 @@ class ActionHandlerDirective extends Directive {
       actionHandlerBind(part.element as ActionHandlerElement, options);
       this.previousOptions = options ? { ...options } : undefined;
     }
-    return this.render(options);
+    return this.render();
   }
 }
 

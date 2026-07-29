@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import type { HomeAssistant, MatrixHelperCardConfig } from "./types";
+import type { HomeAssistant } from "custom-card-helpers";
+import type { MatrixHelperCardConfig } from "./types";
 import { DOMAIN, eventValue } from "./types";
 
 // Hoisted so `ha-entity-picker` sees a stable array reference across

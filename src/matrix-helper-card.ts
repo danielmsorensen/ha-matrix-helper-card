@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import type { HomeAssistant, MatrixHelperCardConfig } from "./types";
+import type { HomeAssistant } from "custom-card-helpers";
+import type { MatrixHelperCardConfig } from "./types";
 import { DOMAIN, eventValue } from "./types";
 import { deslugify } from "./deslugify";
 import "./matrix-helper-card-editor";
@@ -143,15 +144,15 @@ export class MatrixHelperCard extends LitElement {
             <thead>
               <tr>
                 <th></th>
-                ${columns.map((column) => html`<th>${deslugify(column)}</th>`)}
+                ${columns.map((column: string) => html`<th>${deslugify(column)}</th>`)}
               </tr>
             </thead>
             <tbody>
               ${rows.map(
-                (row) => html`
+                (row: string) => html`
                   <tr>
                     <th>${deslugify(row)}</th>
-                    ${columns.map((column) => {
+                    ${columns.map((column: string) => {
                       const cellKey = `${row}:${column}`;
                       const liveValue = data[row]?.[column] ?? null;
                       let committedValue = liveValue;
