@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { HomeAssistant, LovelaceCardEditor, fireEvent } from "custom-card-helpers";
 import type { MatrixHelperCardConfig } from "./types";
@@ -13,6 +13,79 @@ import { ensureHaFormComponentsLoaded } from "./ha-components-loader";
 // something filtered in our own code.
 const ACTIONS = ["more-info", "navigate", "url", "none"] as const;
 
+// Schema-driven editor, handed entirely to <ha-form> -- matching how HA's
+// own built-in cards actually do this (verified directly against
+// home-assistant/frontend's hui-tile-card-editor.ts and
+// hui-generic-entity-row-editor.ts, not assumed): <ha-form> itself renders
+// the entity picker, the collapsible "Content"/"Interactions" sections,
+// the "Default (More info)"-style placeholder text, and the "+ Add
+// interaction" secondary-actions UI for Hold/Double-Tap (the real
+// "optional_actions" schema type) -- none of that is hand-rolled here.
+// Name/Icon/Colour mirror the Entities row editor's own Content layout
+// (verified against its real schema), since that fits this card better
+// than the Tile card's richer, single-entity-state focused version.
+// Secondary information uses ui_state_content -- the same entity-aware
+// selector Tile itself uses -- rather than a hand-copied option list: it
+// computes its own options from the entity's actual attributes/domain
+// (verified directly against ha-selector-ui-state-content.ts and
+// ha-entity-state-content-picker.ts), so it can never drift out of date
+// with what HA itself considers valid for this entity. Static (doesn't
+// depend on hass/config), so it's a module-level constant rather than
+// rebuilt every render.
+const SCHEMA = [
+  { name: "entity", selector: { entity: { filter: { domain: DOMAIN } } } },
+  {
+    name: "content",
+    type: "expandable",
+    flatten: true,
+    schema: [
+      { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
+          {
+            name: "color",
+            selector: { ui_color: { include_state: true, include_none: true } },
+          },
+        ],
+      },
+      {
+        name: "state_content",
+        selector: { ui_state_content: { allow_context: true } },
+        context: { filter_entity: "entity" },
+      },
+    ],
+  },
+  {
+    name: "interactions",
+    type: "expandable",
+    flatten: true,
+    schema: [
+      {
+        name: "tap_action",
+        selector: { ui_action: { actions: ACTIONS, default_action: "more-info" } },
+      },
+      {
+        name: "",
+        type: "optional_actions",
+        flatten: true,
+        schema: [
+          {
+            name: "hold_action",
+            selector: { ui_action: { actions: ACTIONS, default_action: "none" } },
+          },
+          {
+            name: "double_tap_action",
+            selector: { ui_action: { actions: ACTIONS, default_action: "none" } },
+          },
+        ],
+      },
+    ],
+  },
+] as const;
+
 @customElement("matrix-helper-card-editor")
 export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEditor {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -26,81 +99,18 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
     }
   }
 
-  public setConfig(config: MatrixHelperCardConfig): void {
-    this.config = config;
+  protected updated(changedProps: PropertyValues): void {
+    // Defensive: hass isn't guaranteed to already be set at
+    // connectedCallback() time. ensureHaFormComponentsLoaded() is
+    // memoized, so calling it again here once hass actually arrives is
+    // cheap and never re-does the work.
+    if (changedProps.has("hass") && this.hass) {
+      ensureHaFormComponentsLoaded(this.hass).then(() => this.requestUpdate());
+    }
   }
 
-  // Schema-driven editor, handed entirely to <ha-form> -- matching how HA's
-  // own built-in cards actually do this (verified directly against
-  // home-assistant/frontend's hui-tile-card-editor.ts and
-  // hui-generic-entity-row-editor.ts, not assumed): <ha-form> itself renders
-  // the entity picker, the collapsible "Content"/"Interactions" sections,
-  // the "Default (More info)"-style placeholder text, and the "+ Add
-  // interaction" secondary-actions UI for Hold/Double-Tap (the real
-  // "optional_actions" schema type) -- none of that is hand-rolled here.
-  // Name/Icon/Colour mirror the Entities row editor's own Content layout
-  // (verified against its real schema), since that fits this card better
-  // than the Tile card's richer, single-entity-state focused version.
-  // Secondary information uses ui_state_content -- the same entity-aware
-  // selector Tile itself uses -- rather than a hand-copied option list:
-  // it computes its own options from the entity's actual attributes/domain
-  // (verified directly against ha-selector-ui-state-content.ts and
-  // ha-entity-state-content-picker.ts), so it can never drift out of date
-  // with what HA itself considers valid for this entity.
-  private _schema() {
-    return [
-      { name: "entity", selector: { entity: { filter: { domain: DOMAIN } } } },
-      {
-        name: "content",
-        type: "expandable",
-        flatten: true,
-        schema: [
-          { name: "name", selector: { entity_name: {} }, context: { entity: "entity" } },
-          {
-            name: "",
-            type: "grid",
-            schema: [
-              { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
-              {
-                name: "color",
-                selector: { ui_color: { include_state: true, include_none: true } },
-              },
-            ],
-          },
-          {
-            name: "state_content",
-            selector: { ui_state_content: { allow_context: true } },
-            context: { filter_entity: "entity" },
-          },
-        ],
-      },
-      {
-        name: "interactions",
-        type: "expandable",
-        flatten: true,
-        schema: [
-          {
-            name: "tap_action",
-            selector: { ui_action: { actions: ACTIONS, default_action: "more-info" } },
-          },
-          {
-            name: "",
-            type: "optional_actions",
-            flatten: true,
-            schema: [
-              {
-                name: "hold_action",
-                selector: { ui_action: { actions: ACTIONS, default_action: "none" } },
-              },
-              {
-                name: "double_tap_action",
-                selector: { ui_action: { actions: ACTIONS, default_action: "none" } },
-              },
-            ],
-          },
-        ],
-      },
-    ] as const;
+  public setConfig(config: MatrixHelperCardConfig): void {
+    this.config = config;
   }
 
   protected render() {
@@ -111,7 +121,7 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
       <ha-form
         .hass=${this.hass}
         .data=${this.config}
-        .schema=${this._schema()}
+        .schema=${SCHEMA}
         .computeLabel=${this._computeLabel}
         @value-changed=${this._valueChanged}
       ></ha-form>

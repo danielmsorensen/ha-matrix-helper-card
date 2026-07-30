@@ -29,6 +29,63 @@ interface HomeAssistantWithFormatters extends HomeAssistant {
   formatEntityName: (stateObj: MatrixHelperStateObj, name: unknown) => string | undefined;
 }
 
+// The ui_color selector's value is a theme colour *name* (e.g. "red",
+// "deep-purple"), or the sentinels "state"/"none" (its includeState/
+// includeNone options) -- not a CSS colour string. This is
+// computeCssColor()/THEME_COLORS from
+// common/color/compute-color.ts, faithfully copied since neither is
+// exported by any package (confirmed against custom-card-helpers' real
+// exports); rendering the raw value directly, as this card did before,
+// left every theme colour a silent no-op.
+const THEME_COLORS = new Set([
+  "primary",
+  "accent",
+  "red",
+  "pink",
+  "purple",
+  "deep-purple",
+  "indigo",
+  "blue",
+  "light-blue",
+  "cyan",
+  "teal",
+  "green",
+  "light-green",
+  "lime",
+  "yellow",
+  "amber",
+  "orange",
+  "deep-orange",
+  "brown",
+  "light-grey",
+  "grey",
+  "dark-grey",
+  "blue-grey",
+  "black",
+  "white",
+]);
+
+function computeCssColor(color: string): string {
+  return THEME_COLORS.has(color) ? `var(--${color}-color)` : color;
+}
+
+// Mirrors state-badge.ts's real per-entity icon-color logic (the
+// component every generic entity-row/card actually renders through),
+// simplified for this card: "state" would normally resolve via
+// stateColorCss(), a per-domain default (e.g. a lit bulb's own color) --
+// matrix_helper isn't one of the domains stateColorCss() has a rule for,
+// so it always resolves to no override anyway, same as "none". The
+// stateActive() gate on custom colors is also omitted: this entity's
+// state is never "off"/"unavailable" here (that's already handled
+// earlier in render()) and matrix_helper isn't one of stateActive()'s
+// special-cased domains either, so it's unconditionally true for us.
+function computeIconColor(color: string | undefined): string | undefined {
+  if (!color || color === "state" || color === "none") {
+    return undefined;
+  }
+  return computeCssColor(color);
+}
+
 @customElement("matrix-helper-card")
 export class MatrixHelperCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -40,10 +97,10 @@ export class MatrixHelperCard extends LitElement {
   // Cells with an in-progress, not-yet-committed edit. Rendering prefers a
   // draft over the entity's committed value so a re-render triggered by an
   // unrelated state update never overwrites what the user is typing. A draft
-  // is cleared in the finally block of its blur handler (after the service
-  // call resolves, success or failure), at which point rendering falls back
-  // to the (possibly now-updated, possibly unchanged) committed value --
-  // which is also how a failed edit "reverts".
+  // is cleared in the finally block of _commitCell (after the service call
+  // resolves, success or failure), at which point rendering falls back to
+  // the (possibly now-updated, possibly unchanged) committed value -- which
+  // is also how a failed edit "reverts".
   private _drafts = new Map<string, string>();
 
   // Values this card has itself successfully written via set_cell, kept
@@ -118,6 +175,16 @@ export class MatrixHelperCard extends LitElement {
     }
   }
 
+  protected updated(changedProps: PropertyValues): void {
+    // Defensive: hass isn't guaranteed to already be set at
+    // connectedCallback() time. ensureHaFormComponentsLoaded() is
+    // memoized, so calling it again here once hass actually arrives is
+    // cheap and never re-does the work.
+    if (changedProps.has("hass") && this.hass) {
+      ensureHaFormComponentsLoaded(this.hass).then(() => this.requestUpdate());
+    }
+  }
+
   public setConfig(config: MatrixHelperCardConfig): void {
     if (!config.entity || computeDomain(config.entity) !== DOMAIN) {
       throw new Error(
@@ -170,8 +237,9 @@ export class MatrixHelperCard extends LitElement {
       </ha-card>`;
     }
     const title =
-      (this.hass as HomeAssistantWithFormatters).formatEntityName(stateObj, this.config.name) ??
+      (this.hass as HomeAssistantWithFormatters).formatEntityName?.(stateObj, this.config.name) ??
       stateObj.attributes.friendly_name;
+    const iconColor = computeIconColor(this.config.color);
 
     // tap defaults to "more-info" when unset, so an unset tap_action still
     // counts as "has an action"; hold/double-tap have no default action, so
@@ -188,6 +256,7 @@ export class MatrixHelperCard extends LitElement {
           class=${classMap({ background: true, pointer: hasCardAction })}
           tabindex=${hasCardAction ? "0" : nothing}
           role=${hasCardAction ? "button" : nothing}
+          aria-label=${hasCardAction ? title : nothing}
           @action=${this._handleAction}
           ${actionHandler({
             hasHold: hasAction(this.config.hold_action),
@@ -199,7 +268,7 @@ export class MatrixHelperCard extends LitElement {
         <div class="content">
           <div class="header">
             <ha-state-icon
-              style=${this.config.color ? `color: ${this.config.color}` : ""}
+              style=${iconColor ? `color: ${iconColor}` : ""}
               .icon=${this.config.icon}
               .stateObj=${stateObj}
             ></ha-state-icon>
@@ -261,11 +330,13 @@ export class MatrixHelperCard extends LitElement {
                           }}
                           @keydown=${(ev: KeyboardEvent) => {
                             if (ev.key === "Enter") {
+                              // blur() reliably fires ha-input's native
+                              // "change" below, which commits the edit --
+                              // no separate direct call needed here.
                               (ev.target as HTMLElement).blur();
-                              this._onCellBlur(row, column, committedValue);
                             }
                           }}
-                          @change=${() => this._onCellBlur(row, column, committedValue)}
+                          @change=${() => this._commitCell(row, column, committedValue)}
                         ></ha-input>
                       </td>`;
                     })}
@@ -285,7 +356,7 @@ export class MatrixHelperCard extends LitElement {
     }
   }
 
-  private async _onCellBlur(
+  private async _commitCell(
     row: string,
     column: string,
     previousValue: number | null
@@ -294,9 +365,10 @@ export class MatrixHelperCard extends LitElement {
     const hadDraft = this._drafts.has(cellKey);
     const raw = (this._drafts.get(cellKey) ?? "").trim();
 
-    // If there was no @input event for this cell, this blur is not an edit—
-    // just a focus/blur with no typing. Don't call the service, don't touch
-    // _error, and don't delete the draft yet (it's already gone anyway).
+    // If there was no @input event for this cell, this "change" wasn't a
+    // real edit -- e.g. a re-render replaying the same value. Don't call
+    // the service, don't touch _error, and don't delete the draft yet
+    // (it's already gone anyway).
     if (!hadDraft) {
       this.requestUpdate();
       return;

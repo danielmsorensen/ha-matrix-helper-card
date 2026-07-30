@@ -75,9 +75,8 @@ export function ensureHaFormComponentsLoaded(hass: HomeAssistant): Promise<void>
       // needs them, which the tile card's own schema never does for a plain
       // text field (confirmed against its real source: no bare "text"
       // selector anywhere in it). Render one ourselves, briefly and hidden,
-      // so this card's own text-selector usage (its grid cells, its
-      // editor's Title field) works reliably even on a page load that never
-      // opens the config editor.
+      // so this card's own text-selector usage (its grid cells) works
+      // reliably even on a page load that never opens the config editor.
       const probe = document.createElement("ha-form") as ProbeHaForm;
       probe.hass = hass;
       probe.data = {};
