@@ -61,7 +61,7 @@ export class MatrixHelperCard extends LitElement {
     td:first-child {
       text-align: left;
     }
-    ha-textfield.cell {
+    ha-input.cell {
       width: 96px;
     }
   `;
@@ -182,8 +182,9 @@ export class MatrixHelperCard extends LitElement {
                           ? ""
                           : String(committedValue);
                       return html`<td>
-                        <ha-textfield
+                        <ha-input
                           class="cell"
+                          appearance="outlined"
                           type="text"
                           inputmode="decimal"
                           .value=${displayValue}
@@ -194,7 +195,8 @@ export class MatrixHelperCard extends LitElement {
                           @keydown=${(ev: KeyboardEvent) => {
                             ev.stopPropagation();
                             if (ev.key === "Enter") {
-                              (ev.target as HTMLInputElement).blur();
+                              (ev.target as HTMLElement).blur();
+                              this._onCellBlur(row, column, committedValue);
                             }
                           }}
                           @click=${(ev: Event) => ev.stopPropagation()}
@@ -202,8 +204,8 @@ export class MatrixHelperCard extends LitElement {
                           @touchstart=${(ev: Event) => ev.stopPropagation()}
                           @touchend=${(ev: Event) => ev.stopPropagation()}
                           @touchcancel=${(ev: Event) => ev.stopPropagation()}
-                          @blur=${() => this._onCellBlur(row, column, committedValue)}
-                        ></ha-textfield>
+                          @change=${() => this._onCellBlur(row, column, committedValue)}
+                        ></ha-input>
                       </td>`;
                     })}
                   </tr>
