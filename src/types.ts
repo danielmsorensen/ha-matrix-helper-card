@@ -14,14 +14,19 @@ export interface MatrixHelperStateObj {
   };
 }
 
-export type SecondaryInfo = "none" | "entity-id" | "last-changed";
-
 export interface MatrixHelperCardConfig extends LovelaceCardConfig {
   entity: string;
-  name?: string;
+  // Opaque: the entity_name selector's value isn't a plain string (its
+  // "Composed" mode stores a name-part recipe) -- hass.formatEntityName()
+  // is the real function that interprets whatever shape this is, the same
+  // way every built-in card using this selector does. See
+  // matrix-helper-card.ts's HomeAssistantWithFormatters cast.
+  name?: unknown;
   icon?: string;
   color?: string;
-  secondary_info?: SecondaryInfo;
+  // Also opaque -- state-display interprets this itself, the same way
+  // hui-tile-card.ts hands its own state_content straight through.
+  state_content?: string | string[];
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;

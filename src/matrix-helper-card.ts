@@ -8,7 +8,6 @@ import {
   hasAction,
   hasConfigOrEntityChanged,
   computeDomain,
-  relativeTime,
 } from "custom-card-helpers";
 import type { MatrixHelperCardConfig, MatrixHelperStateObj } from "./types";
 import { DOMAIN, eventValue } from "./types";
@@ -16,6 +15,19 @@ import { deslugify } from "./deslugify";
 import { actionHandler } from "./action-handler-directive";
 import { ensureHaFormComponentsLoaded } from "./ha-components-loader";
 import "./matrix-helper-card-editor";
+
+// hass.formatEntityName() is the real function every built-in card uses to
+// interpret a "name" config value written by the entity_name selector
+// (Composed mode stores a name-part recipe, not a plain string -- rendering
+// it directly, as this card did before, produces "[object Object]"). It's
+// not declared on the installed custom-card-helpers@2.0.0's HomeAssistant
+// type (that type predates it), but it exists at runtime in the actual app
+// -- confirmed directly against hui-tile-card.ts's own
+// `this.hass.formatEntityName(stateObj, this._config.name)` call, on the
+// same frontend version this project's dev instance runs.
+interface HomeAssistantWithFormatters extends HomeAssistant {
+  formatEntityName: (stateObj: MatrixHelperStateObj, name: unknown) => string | undefined;
+}
 
 @customElement("matrix-helper-card")
 export class MatrixHelperCard extends LitElement {
@@ -175,8 +187,9 @@ export class MatrixHelperCard extends LitElement {
         <div style="padding: 16px;">Entity ${this.config.entity} is unavailable.</div>
       </ha-card>`;
     }
-    const title = this.config.name ?? stateObj.attributes.friendly_name;
-    const secondaryText = this._computeSecondaryText(stateObj);
+    const title =
+      (this.hass as HomeAssistantWithFormatters).formatEntityName(stateObj, this.config.name) ??
+      stateObj.attributes.friendly_name;
 
     // tap defaults to "more-info" when unset, so an unset tap_action still
     // counts as "has an action"; hold/double-tap have no default action, so
@@ -210,7 +223,15 @@ export class MatrixHelperCard extends LitElement {
             ></ha-state-icon>
             <div class="info">
               <div class="primary">${title}</div>
-              ${secondaryText ? html`<div class="secondary">${secondaryText}</div>` : nothing}
+              ${this.config.state_content
+                ? html`<div class="secondary">
+                    <state-display
+                      .hass=${this.hass}
+                      .stateObj=${stateObj}
+                      .content=${this.config.state_content}
+                    ></state-display>
+                  </div>`
+                : nothing}
             </div>
           </div>
           ${this._error
@@ -279,26 +300,6 @@ export class MatrixHelperCard extends LitElement {
   private _handleAction(ev: ActionHandlerEvent): void {
     if (this.hass && this.config) {
       handleAction(this, this.hass, this.config, ev.detail.action);
-    }
-  }
-
-  // Mirrors the applicable subset of the Entities row editor's
-  // "secondary_info" options (entity-row.ts's own SECONDARY_INFO_VALUES) --
-  // "area"/"state" were left out: this domain has no meaningful area
-  // association, and this entity's own `state` is already the same
-  // last-modified timestamp "last-changed" surfaces, just via the generic
-  // hass field instead of a domain-specific one.
-  private _computeSecondaryText(stateObj: MatrixHelperStateObj): string | undefined {
-    if (!this.hass || !this.config) {
-      return undefined;
-    }
-    switch (this.config.secondary_info) {
-      case "entity-id":
-        return this.config.entity;
-      case "last-changed":
-        return relativeTime(new Date(stateObj.last_changed), this.hass.locale);
-      default:
-        return undefined;
     }
   }
 

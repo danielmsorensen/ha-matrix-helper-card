@@ -1,7 +1,7 @@
 import { LitElement, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { HomeAssistant, LovelaceCardEditor, fireEvent } from "custom-card-helpers";
-import type { MatrixHelperCardConfig, SecondaryInfo } from "./types";
+import type { MatrixHelperCardConfig } from "./types";
 import { DOMAIN } from "./types";
 import { ensureHaFormComponentsLoaded } from "./ha-components-loader";
 
@@ -12,14 +12,6 @@ import { ensureHaFormComponentsLoaded } from "./ha-components-loader";
 // restriction is a config option on the real ui_action selector, not
 // something filtered in our own code.
 const ACTIONS = ["more-info", "navigate", "url", "none"] as const;
-
-// The applicable subset of the Entities row editor's own secondary-info
-// options (hui-generic-entity-row-editor.ts's SECONDARY_INFO_VALUES) --
-// "area"/"state"/"last-updated" left out: this domain has no meaningful area
-// association, "state" would show this entity's raw ISO timestamp
-// unformatted, and "last-updated" is redundant with "last-changed" for an
-// entity whose state IS its own last-modified time (see matrix.py).
-const SECONDARY_INFO_OPTIONS: readonly SecondaryInfo[] = ["none", "entity-id", "last-changed"];
 
 @customElement("matrix-helper-card-editor")
 export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEditor {
@@ -46,11 +38,16 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
   // the "Default (More info)"-style placeholder text, and the "+ Add
   // interaction" secondary-actions UI for Hold/Double-Tap (the real
   // "optional_actions" schema type) -- none of that is hand-rolled here.
-  // Name/Icon/Colour/Secondary-information mirror the Entities row editor's
-  // own Content layout exactly (verified against its real schema), since it
-  // fits this card better than the Tile card's richer, single-entity-state
-  // focused version.
-  private _schema(hass: HomeAssistant) {
+  // Name/Icon/Colour mirror the Entities row editor's own Content layout
+  // (verified against its real schema), since that fits this card better
+  // than the Tile card's richer, single-entity-state focused version.
+  // Secondary information uses ui_state_content -- the same entity-aware
+  // selector Tile itself uses -- rather than a hand-copied option list:
+  // it computes its own options from the entity's actual attributes/domain
+  // (verified directly against ha-selector-ui-state-content.ts and
+  // ha-entity-state-content-picker.ts), so it can never drift out of date
+  // with what HA itself considers valid for this entity.
+  private _schema() {
     return [
       { name: "entity", selector: { entity: { filter: { domain: DOMAIN } } } },
       {
@@ -71,17 +68,9 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
             ],
           },
           {
-            name: "secondary_info",
-            selector: {
-              select: {
-                options: SECONDARY_INFO_OPTIONS.map((value) => ({
-                  value,
-                  label: hass.localize(
-                    `ui.panel.lovelace.editor.card.entities.secondary_info_values.${value}`
-                  ),
-                })),
-              },
-            },
+            name: "state_content",
+            selector: { ui_state_content: { allow_context: true } },
+            context: { filter_entity: "entity" },
           },
         ],
       },
@@ -122,21 +111,22 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
       <ha-form
         .hass=${this.hass}
         .data=${this.config}
-        .schema=${this._schema(this.hass)}
+        .schema=${this._schema()}
         .computeLabel=${this._computeLabel}
         @value-changed=${this._valueChanged}
       ></ha-form>
     `;
   }
 
-  // "secondary_info" uses the same dedicated translation key the real
-  // Entities row editor uses for it (not the generic fallback); everything
+  // "state_content" uses the same dedicated (tile-namespaced) translation
+  // key hui-tile-card-editor.ts's own computeLabel uses for it (not the
+  // generic fallback -- there is no generic.state_content key); everything
   // else here (entity, name, icon, color, tap_action, hold_action,
   // double_tap_action, content, interactions) is a real generic label
   // already used by other cards.
   private _computeLabel = (schema: { name: string }): string => {
-    if (schema.name === "secondary_info") {
-      return this.hass!.localize("ui.panel.lovelace.editor.card.entity-row.secondary_info");
+    if (schema.name === "state_content") {
+      return this.hass!.localize("ui.panel.lovelace.editor.card.tile.state_content");
     }
     return this.hass!.localize(`ui.panel.lovelace.editor.card.generic.${schema.name}`);
   };
