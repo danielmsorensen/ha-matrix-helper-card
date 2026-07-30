@@ -28,7 +28,11 @@ const SCHEMA = [
     name: "content",
     type: "expandable",
     flatten: true,
-    schema: [{ name: "title", selector: { text: {} } }],
+    schema: [
+      { name: "title", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
+      { name: "show_last_changed", selector: { boolean: {} } },
+    ],
   },
   {
     name: "interactions",
@@ -95,11 +99,21 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
   // tap_action, hold_action, double_tap_action, content, interactions) is a
   // real generic label already used by other cards, reused the same way
   // hui-tile-card-editor.ts's own computeLabel falls back to them.
+  // "title" and "show_last_changed" are our own fields, not part of HA's
+  // generic card schema, so they have no built-in translation -- everything
+  // else here (entity, icon, tap_action, hold_action, double_tap_action,
+  // content, interactions) is a real generic label already used by other
+  // cards, reused the same way hui-tile-card-editor.ts's own computeLabel
+  // falls back to them.
   private _computeLabel = (schema: { name: string }): string => {
-    if (schema.name === "title") {
-      return "Title (optional)";
+    switch (schema.name) {
+      case "title":
+        return "Title (optional)";
+      case "show_last_changed":
+        return "Show last changed";
+      default:
+        return this.hass!.localize(`ui.panel.lovelace.editor.card.generic.${schema.name}`);
     }
-    return this.hass!.localize(`ui.panel.lovelace.editor.card.generic.${schema.name}`);
   };
 
   private _valueChanged(ev: CustomEvent<{ value: MatrixHelperCardConfig }>): void {

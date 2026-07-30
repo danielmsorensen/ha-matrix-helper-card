@@ -4,6 +4,7 @@ export const DOMAIN = "matrix_helper";
 
 export interface MatrixHelperStateObj {
   state: string;
+  last_changed: string;
   attributes: {
     friendly_name?: string;
     rows?: string[];
@@ -16,6 +17,8 @@ export interface MatrixHelperStateObj {
 export interface MatrixHelperCardConfig extends LovelaceCardConfig {
   entity: string;
   title?: string;
+  icon?: string;
+  show_last_changed?: boolean;
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;

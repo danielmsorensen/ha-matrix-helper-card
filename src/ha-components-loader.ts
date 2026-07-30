@@ -18,6 +18,11 @@ interface ProbeHaForm extends HTMLElement {
   updateComplete?: Promise<unknown>;
 }
 
+interface ProbeCard extends HTMLElement {
+  hass?: HomeAssistant;
+  updateComplete?: Promise<unknown>;
+}
+
 // Home Assistant lazy-loads many of its own UI components (ha-form,
 // ha-selector, ha-expansion-panel, ha-alert, ...), and there is no supported
 // way for a custom card to import them directly -- confirmed by HA's own
@@ -40,8 +45,24 @@ export function ensureHaFormComponentsLoaded(hass: HomeAssistant): Promise<void>
       if (!helpers) {
         return;
       }
-      const card = await helpers.createCardElement({ type: "tile", entity: "sun.sun" });
+      const card = (await helpers.createCardElement({
+        type: "tile",
+        entity: "sun.sun",
+      })) as ProbeCard;
       card.hass = hass;
+
+      // Calling the static getConfigElement() alone (as before) only
+      // dynamically imports the editor's module -- it registers whatever
+      // that module statically imports (ha-form, ha-expansion-panel,
+      // ha-alert) but never actually renders an editor instance, so nothing
+      // the *card itself* needs (ha-state-icon, used for this card's own
+      // header icon) gets pulled in. Render the real tile card too, briefly
+      // and hidden, so its module's own top-level imports register as well.
+      card.style.display = "none";
+      document.body.appendChild(card);
+      await card.updateComplete;
+      card.remove();
+
       const ctor = card.constructor as { getConfigElement?: () => Promise<unknown> };
       await ctor.getConfigElement?.();
 

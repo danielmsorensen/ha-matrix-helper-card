@@ -8,6 +8,7 @@ import {
   hasAction,
   hasConfigOrEntityChanged,
   computeDomain,
+  relativeTime,
 } from "custom-card-helpers";
 import type { MatrixHelperCardConfig, MatrixHelperStateObj } from "./types";
 import { DOMAIN, eventValue } from "./types";
@@ -41,8 +42,56 @@ export class MatrixHelperCard extends LitElement {
     ha-card {
       position: relative;
     }
-    ha-card.pointer {
+    /* Matches how HA's own tile card isolates its whole-card tap/ripple
+       area from independently-interactive content: a separate, absolutely
+       positioned sibling behind the visible content, rather than binding
+       the action handler to an ancestor of the interactive elements. The
+       content layer is pointer-events: none so clicks on non-interactive
+       areas (padding, header text, table borders) pass through to it;
+       .cell explicitly re-enables pointer-events so each input stays
+       independently clickable/editable without triggering the card's own
+       tap/hold/double-tap action or its hover/ripple effect. */
+    .background {
+      position: absolute;
+      inset: 0;
+      border-radius: var(--ha-card-border-radius, 12px);
+      overflow: hidden;
+    }
+    .background.pointer {
       cursor: pointer;
+    }
+    .content {
+      position: relative;
+      pointer-events: none;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .header ha-state-icon {
+      --mdc-icon-size: 24px;
+      color: var(--state-icon-color, var(--secondary-text-color));
+    }
+    .header .info {
+      min-width: 0;
+    }
+    .header .primary {
+      font-size: var(--ha-font-size-m, 1em);
+      font-weight: var(--ha-font-weight-medium, 500);
+      color: var(--primary-text-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .header .secondary {
+      font-size: var(--ha-font-size-s, 0.85em);
+      color: var(--secondary-text-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     table {
       border-collapse: collapse;
@@ -63,6 +112,8 @@ export class MatrixHelperCard extends LitElement {
     }
     ha-input.cell {
       width: 96px;
+      margin: 0 auto;
+      pointer-events: auto;
     }
   `;
 
@@ -136,19 +187,31 @@ export class MatrixHelperCard extends LitElement {
       hasAction(this.config.double_tap_action);
 
     return html`
-      <ha-card
-        .header=${title}
-        class=${classMap({ pointer: hasCardAction })}
-        tabindex=${hasCardAction ? "0" : nothing}
-        role=${hasCardAction ? "button" : nothing}
-        @action=${this._handleAction}
-        ${actionHandler({
-          hasHold: hasAction(this.config.hold_action),
-          hasDoubleClick: hasAction(this.config.double_tap_action),
-        })}
-      >
-        ${hasCardAction ? html`<ha-ripple></ha-ripple>` : nothing}
-        <div style="padding: 0 16px 16px;">
+      <ha-card>
+        <div
+          class=${classMap({ background: true, pointer: hasCardAction })}
+          tabindex=${hasCardAction ? "0" : nothing}
+          role=${hasCardAction ? "button" : nothing}
+          @action=${this._handleAction}
+          ${actionHandler({
+            hasHold: hasAction(this.config.hold_action),
+            hasDoubleClick: hasAction(this.config.double_tap_action),
+          })}
+        >
+          <ha-ripple .disabled=${!hasCardAction}></ha-ripple>
+        </div>
+        <div class="content">
+          <div class="header">
+            <ha-state-icon .icon=${this.config.icon} .stateObj=${stateObj}></ha-state-icon>
+            <div class="info">
+              <div class="primary">${title}</div>
+              ${this.config.show_last_changed
+                ? html`<div class="secondary">
+                    ${relativeTime(new Date(stateObj.last_changed), this.hass.locale)}
+                  </div>`
+                : nothing}
+            </div>
+          </div>
           ${this._error
             ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
             : ""}
@@ -193,17 +256,11 @@ export class MatrixHelperCard extends LitElement {
                             this.requestUpdate();
                           }}
                           @keydown=${(ev: KeyboardEvent) => {
-                            ev.stopPropagation();
                             if (ev.key === "Enter") {
                               (ev.target as HTMLElement).blur();
                               this._onCellBlur(row, column, committedValue);
                             }
                           }}
-                          @click=${(ev: Event) => ev.stopPropagation()}
-                          @mousedown=${(ev: Event) => ev.stopPropagation()}
-                          @touchstart=${(ev: Event) => ev.stopPropagation()}
-                          @touchend=${(ev: Event) => ev.stopPropagation()}
-                          @touchcancel=${(ev: Event) => ev.stopPropagation()}
                           @change=${() => this._onCellBlur(row, column, committedValue)}
                         ></ha-input>
                       </td>`;
