@@ -118,15 +118,18 @@ export class MatrixHelperCardEditor extends LitElement implements LovelaceCardEd
     `;
   }
 
-  // "state_content" uses the same dedicated (tile-namespaced) translation
-  // key hui-tile-card-editor.ts's own computeLabel uses for it (not the
-  // generic fallback -- there is no generic.state_content key); everything
-  // else here (entity, name, icon, color, tap_action, hold_action,
+  // "state_content" is labeled with the Entities row editor's own
+  // "Secondary information" string rather than Tile's "State content" --
+  // this card's actual entity state is the whole grid, not a single value,
+  // so "secondary information" describes what this field shows more
+  // accurately. The selector/component underneath (ui_state_content /
+  // state-display) is unchanged -- only the label differs; everything else
+  // here (entity, name, icon, color, tap_action, hold_action,
   // double_tap_action, content, interactions) is a real generic label
   // already used by other cards.
   private _computeLabel = (schema: { name: string }): string => {
     if (schema.name === "state_content") {
-      return this.hass!.localize("ui.panel.lovelace.editor.card.tile.state_content");
+      return this.hass!.localize("ui.panel.lovelace.editor.card.entity-row.secondary_info");
     }
     return this.hass!.localize(`ui.panel.lovelace.editor.card.generic.${schema.name}`);
   };

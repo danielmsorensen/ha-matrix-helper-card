@@ -87,24 +87,6 @@ export class MatrixHelperCard extends LitElement {
       --mdc-icon-size: 24px;
       color: var(--state-icon-color, var(--secondary-text-color));
     }
-    .header .info {
-      min-width: 0;
-    }
-    .header .primary {
-      font-size: var(--ha-font-size-m, 1em);
-      font-weight: var(--ha-font-weight-medium, 500);
-      color: var(--primary-text-color);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .header .secondary {
-      font-size: var(--ha-font-size-s, 0.85em);
-      color: var(--secondary-text-color);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
     table {
       border-collapse: collapse;
       width: 100%;
@@ -221,18 +203,18 @@ export class MatrixHelperCard extends LitElement {
               .icon=${this.config.icon}
               .stateObj=${stateObj}
             ></ha-state-icon>
-            <div class="info">
-              <div class="primary">${title}</div>
+            <ha-tile-info>
+              <span slot="primary">${title}</span>
               ${this.config.state_content
-                ? html`<div class="secondary">
+                ? html`<span slot="secondary">
                     <state-display
                       .hass=${this.hass}
                       .stateObj=${stateObj}
                       .content=${this.config.state_content}
                     ></state-display>
-                  </div>`
+                  </span>`
                 : nothing}
-            </div>
+            </ha-tile-info>
           </div>
           ${this._error
             ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
