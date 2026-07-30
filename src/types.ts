@@ -14,11 +14,14 @@ export interface MatrixHelperStateObj {
   };
 }
 
+export type SecondaryInfo = "none" | "entity-id" | "last-changed";
+
 export interface MatrixHelperCardConfig extends LovelaceCardConfig {
   entity: string;
-  title?: string;
+  name?: string;
   icon?: string;
-  show_last_changed?: boolean;
+  color?: string;
+  secondary_info?: SecondaryInfo;
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;
