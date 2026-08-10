@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && esbuild src/matrix-helper-card.ts --bundle --minify --format=esm --outfile=dist/matrix-helper-card.js",
+    "watch": "esbuild src/matrix-helper-card.ts --bundle --minify --format=esm --outfile=dist/matrix-helper-card.js --watch",
     "lint": "eslint src"
   },
   "dependencies": {

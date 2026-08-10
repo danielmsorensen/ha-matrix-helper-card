@@ -50,10 +50,12 @@ Run `scripts/lint` (ESLint) before submitting.
 
 - `scripts/setup` — install dependencies
 - `scripts/build` — type-check and bundle the card
+- `scripts/watch` — rebuild on every save
 - `scripts/lint` — run ESLint
+- `scripts/link-local` — copy the build into a local Home Assistant instance for testing
 
-See the main [README](./README.md#development) for how to try changes against a running
-Home Assistant instance.
+See the main [README](./README.md#testing-against-a-local-ha-matrix-helper-instance) for
+the full workflow for trying changes against a running Home Assistant instance.
 
 ## License
 

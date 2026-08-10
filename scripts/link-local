@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Copies the built card into a local Home Assistant instance's config/www so
+# it can be reloaded there without HACS or a manual drag-and-drop. Defaults
+# to a sibling ha-matrix-helper checkout's dev config.
+DEST_DIR="${1:-../ha-matrix-helper/config/www}"
+
+if [[ ! -f dist/matrix-helper-card.js ]]; then
+    echo "dist/matrix-helper-card.js not found — run scripts/build or scripts/watch first." >&2
+    exit 1
+fi
+
+mkdir -p "${DEST_DIR}"
+cp dist/matrix-helper-card.js "${DEST_DIR}/matrix-helper-card.js"
+echo "Copied dist/matrix-helper-card.js -> ${DEST_DIR}/matrix-helper-card.js"
+echo "Hard-refresh (Ctrl+F5) the dashboard — Home Assistant does not auto-bust the cache for manually added /local/ resources."

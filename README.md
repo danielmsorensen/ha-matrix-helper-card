@@ -56,8 +56,21 @@ Requires Node.js 18+.
 
 - `scripts/setup` — install dependencies
 - `scripts/build` — type-check and bundle to `dist/matrix-helper-card.js`
+- `scripts/watch` — rebuild on every save (skips the type-check `scripts/build` does, for
+  fast iteration)
 - `scripts/lint` — run ESLint
+- `scripts/link-local [dest]` — copy `dist/matrix-helper-card.js` into a local Home
+  Assistant instance's `config/www/`, so you can test without HACS or a manual copy each
+  time. Defaults to a sibling
+  [ha-matrix-helper](https://github.com/danielmsorensen/ha-matrix-helper) checkout's dev
+  config (`../ha-matrix-helper/config/www`); pass a path to target something else.
 
-To try changes against a running Home Assistant instance, run `scripts/build` and copy
-`dist/matrix-helper-card.js` into that instance's `config/www/` folder (see
-[Manual installation](#manual) above).
+### Testing against a local ha-matrix-helper instance
+
+1. In a sibling checkout of [ha-matrix-helper](https://github.com/danielmsorensen/ha-matrix-helper),
+   run `scripts/develop` to start a local Home Assistant instance, and add this card as a
+   dashboard resource once (`/local/matrix-helper-card.js`, see [Manual](#manual) above).
+2. Here, run `scripts/watch` to rebuild on save.
+3. After each change, run `scripts/link-local` to copy the new build over, then
+   hard-refresh (Ctrl+F5) the dashboard — Home Assistant does not auto-bust the cache for
+   manually added `/local/` resources.
