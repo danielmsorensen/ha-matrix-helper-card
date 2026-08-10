@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+permissions: {}
+
+jobs:
+  eslint:
+    name: "ESLint"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@0902d5f6c1af0da5e73fbd0d7d7a4c8bb3c58a2b # v5.0.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
