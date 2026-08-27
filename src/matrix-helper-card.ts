@@ -144,6 +144,11 @@ export class MatrixHelperCard extends LitElement {
       --mdc-icon-size: 24px;
       color: var(--state-icon-color, var(--secondary-text-color));
     }
+    .table-wrapper {
+      overflow: auto;
+      max-height: 400px;
+      pointer-events: auto;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
@@ -160,6 +165,26 @@ export class MatrixHelperCard extends LitElement {
     th:first-child,
     td:first-child {
       text-align: left;
+    }
+    /* Frozen header row and label column, spreadsheet-style, so a large
+       matrix never scrolls a cell's row/column label out of view. The
+       corner cell is sticky on both axes, so it needs to sit above both the
+       header row and the label column where they'd otherwise overlap. */
+    thead th {
+      position: sticky;
+      top: 0;
+      background: var(--card-background-color);
+      z-index: 1;
+    }
+    th:first-child,
+    td:first-child {
+      position: sticky;
+      left: 0;
+      background: var(--card-background-color);
+      z-index: 1;
+    }
+    thead th:first-child {
+      z-index: 2;
     }
     ha-input.cell {
       width: 96px;
@@ -288,16 +313,17 @@ export class MatrixHelperCard extends LitElement {
           ${this._error
             ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
             : ""}
-          <table>
-            <thead>
-              <tr>
-                <th></th>
-                ${columns.map((column) => html`<th>${deslugify(column)}</th>`)}
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map(
-                (row) => html`
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  ${columns.map((column) => html`<th>${deslugify(column)}</th>`)}
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(
+                  (row) => html`
                   <tr>
                     <th>${deslugify(row)}</th>
                     ${columns.map((column) => {
@@ -342,9 +368,10 @@ export class MatrixHelperCard extends LitElement {
                     })}
                   </tr>
                 `
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </ha-card>
     `;
