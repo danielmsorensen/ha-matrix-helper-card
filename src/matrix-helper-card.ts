@@ -29,6 +29,20 @@ interface HomeAssistantWithFormatters extends HomeAssistant {
   formatEntityName: (stateObj: MatrixHelperStateObj, name: unknown) => string | undefined;
 }
 
+// Not declared on custom-card-helpers@2.0.0's LovelaceCard (that type predates
+// getGridOptions too) -- shape confirmed against the real
+// src/panels/lovelace/types.ts. Returning this from getGridOptions() opts the
+// card into the sections view's per-card "Rows" control; without it, sections
+// view ignores rows entirely and the card is always sized to its content.
+interface LovelaceGridOptions {
+  columns?: number | "full";
+  rows?: number | "auto";
+  max_columns?: number;
+  min_columns?: number;
+  min_rows?: number;
+  max_rows?: number;
+}
+
 // The ui_color selector's value is a theme colour *name* (e.g. "red",
 // "deep-purple"), or the sentinels "state"/"none" (its includeState/
 // includeNone options) -- not a CSS colour string. This is
@@ -108,8 +122,17 @@ export class MatrixHelperCard extends LitElement {
   private _confirmed = new Map<string, number | null>();
 
   static styles = css`
+    /* height: 100% + the flex column chain below lets .table-wrapper fill
+       whatever height the sections view's per-card "Rows" control (see
+       getGridOptions()) assigns -- same pattern as HA's own map card. With
+       no explicit row count (the default, and always the case in masonry
+       view), height: 100% resolves against an auto-sized ancestor and is a
+       no-op, so the card still just sizes to its content as before. */
     ha-card {
       position: relative;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
     /* Matches how HA's own tile card isolates its whole-card tap/ripple
        area from independently-interactive content: a separate, absolutely
@@ -133,6 +156,10 @@ export class MatrixHelperCard extends LitElement {
       position: relative;
       pointer-events: none;
       padding: 16px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       display: flex;
@@ -146,7 +173,8 @@ export class MatrixHelperCard extends LitElement {
     }
     .table-wrapper {
       overflow: auto;
-      max-height: 400px;
+      flex: 1;
+      min-height: 0;
       pointer-events: auto;
     }
     table {
@@ -224,6 +252,14 @@ export class MatrixHelperCard extends LitElement {
 
   public getCardSize(): number {
     return 3;
+  }
+
+  public getGridOptions(): LovelaceGridOptions {
+    return {
+      columns: 12,
+      min_columns: 6,
+      min_rows: 3,
+    };
   }
 
   public static getConfigElement(): HTMLElement {
