@@ -117,10 +117,6 @@ export class MatrixHelperCard extends LitElement {
   // is also how a failed edit "reverts".
   private _drafts = new Map<string, string>();
 
-  // Values this card has itself successfully written via set_cell, kept
-  // until hass.states reflects them. See git history / design spec for why.
-  private _confirmed = new Map<string, number | null>();
-
   static styles = css`
     /* height: 100% + the flex column chain below lets .table-wrapper fill
        whatever height the sections view's per-card "Rows" control (see
@@ -246,7 +242,6 @@ export class MatrixHelperCard extends LitElement {
     }
     this.config = config;
     this._drafts.clear();
-    this._confirmed.clear();
     this._error = undefined;
   }
 
@@ -366,16 +361,7 @@ export class MatrixHelperCard extends LitElement {
                     <th>${row_labels?.[i] ?? deslugify(row)}</th>
                     ${columns.map((column) => {
                       const cellKey = `${row}:${column}`;
-                      const liveValue = data[row]?.[column] ?? null;
-                      let committedValue = liveValue;
-                      if (this._confirmed.has(cellKey)) {
-                        const confirmedValue = this._confirmed.get(cellKey)!;
-                        if (confirmedValue === liveValue) {
-                          this._confirmed.delete(cellKey);
-                        } else {
-                          committedValue = confirmedValue;
-                        }
-                      }
+                      const committedValue = data[row]?.[column] ?? null;
                       const displayValue = this._drafts.has(cellKey)
                         ? this._drafts.get(cellKey)!
                         : committedValue === null
@@ -474,7 +460,6 @@ export class MatrixHelperCard extends LitElement {
 
     try {
       await this.hass.callService(DOMAIN, "set_cell", serviceData);
-      this._confirmed.set(cellKey, newValue);
       this._error = undefined;
     } catch (err) {
       this._error = err instanceof Error ? err.message : String(err);
