@@ -291,7 +291,7 @@ export class MatrixHelperCard extends LitElement {
       </ha-card>`;
     }
 
-    const { rows, columns, data } = stateObj.attributes;
+    const { rows, columns, data, row_labels, column_labels } = stateObj.attributes;
     if (stateObj.state === "unavailable" || !rows || !columns || !data) {
       return html`<ha-card>
         <div style="padding: 16px;">Entity ${this.config.entity} is unavailable.</div>
@@ -354,14 +354,16 @@ export class MatrixHelperCard extends LitElement {
               <thead>
                 <tr>
                   <th></th>
-                  ${columns.map((column) => html`<th>${deslugify(column)}</th>`)}
+                  ${columns.map(
+                    (column, i) => html`<th>${column_labels?.[i] ?? deslugify(column)}</th>`
+                  )}
                 </tr>
               </thead>
               <tbody>
                 ${rows.map(
-                  (row) => html`
+                  (row, i) => html`
                   <tr>
-                    <th>${deslugify(row)}</th>
+                    <th>${row_labels?.[i] ?? deslugify(row)}</th>
                     ${columns.map((column) => {
                       const cellKey = `${row}:${column}`;
                       const liveValue = data[row]?.[column] ?? null;

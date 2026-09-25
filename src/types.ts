@@ -8,6 +8,9 @@ export interface MatrixHelperStateObj {
     friendly_name?: string;
     rows?: string[];
     columns?: string[];
+    // The labels as originally typed, parallel to rows/columns (1.1.0+).
+    row_labels?: string[];
+    column_labels?: string[];
     data?: Record<string, Record<string, number | null>>;
     [key: string]: unknown;
   };
