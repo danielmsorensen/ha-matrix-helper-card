@@ -6,7 +6,6 @@ import {
   ActionHandlerEvent,
   handleAction,
   hasAction,
-  hasConfigOrEntityChanged,
   computeDomain,
 } from "custom-card-helpers";
 import type { MatrixHelperCardConfig, MatrixHelperStateObj } from "./types";
@@ -217,19 +216,13 @@ export class MatrixHelperCard extends LitElement {
     }
   `;
 
-  public connectedCallback(): void {
-    super.connectedCallback();
-    if (this.hass) {
-      ensureHaFormComponentsLoaded(this.hass).then(() => this.requestUpdate());
-    }
-  }
+  private _componentsRequested = false;
 
-  protected updated(changedProps: PropertyValues): void {
-    // Defensive: hass isn't guaranteed to already be set at
-    // connectedCallback() time. ensureHaFormComponentsLoaded() is
-    // memoized, so calling it again here once hass actually arrives is
-    // cheap and never re-does the work.
-    if (changedProps.has("hass") && this.hass) {
+  // hass isn't guaranteed to be set yet at connectedCallback() time, so this
+  // runs on the first update that has it, once.
+  protected updated(): void {
+    if (this.hass && !this._componentsRequested) {
+      this._componentsRequested = true;
       ensureHaFormComponentsLoaded(this.hass).then(() => this.requestUpdate());
     }
   }
@@ -245,8 +238,11 @@ export class MatrixHelperCard extends LitElement {
     this._error = undefined;
   }
 
+  // Masonry view's height estimate, in ~50px units: header plus one per row.
   public getCardSize(): number {
-    return 3;
+    const stateObj = this.config && this.hass?.states[this.config.entity];
+    const rows = (stateObj as MatrixHelperStateObj | undefined)?.attributes.rows;
+    return 2 + (rows?.length ?? 1);
   }
 
   public getGridOptions(): LovelaceGridOptions {
@@ -266,11 +262,14 @@ export class MatrixHelperCard extends LitElement {
     return { type: "custom:matrix-helper-card", entity: entity ?? "" };
   }
 
+  // hass changes on every state change anywhere in HA; only re-render for
+  // our own entity, or when anything else (config, drafts, errors) changed.
   protected shouldUpdate(changedProps: PropertyValues): boolean {
-    if (!this.config) {
+    const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
+    if (!this.config || !oldHass || changedProps.size > 1) {
       return true;
     }
-    return hasConfigOrEntityChanged(this, changedProps, false);
+    return oldHass.states[this.config.entity] !== this.hass?.states[this.config.entity];
   }
 
   protected render() {
