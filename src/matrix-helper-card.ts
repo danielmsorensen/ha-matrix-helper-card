@@ -379,7 +379,13 @@ export class MatrixHelperCard extends LitElement {
                             this.requestUpdate();
                           }}
                           @keydown=${(ev: KeyboardEvent) => {
-                            if (ev.key === "Enter") {
+                            if (ev.key === "Escape") {
+                              // Discard the edit; with no draft left, the
+                              // blur's "change" below is a no-op.
+                              this._drafts.delete(cellKey);
+                              this.requestUpdate();
+                            }
+                            if (ev.key === "Enter" || ev.key === "Escape") {
                               // blur() reliably fires ha-input's native
                               // "change" below, which commits the edit --
                               // no separate direct call needed here.
@@ -429,8 +435,10 @@ export class MatrixHelperCard extends LitElement {
     if (raw === "") {
       newValue = null;
     } else {
-      const parsed = Number(raw);
-      if (Number.isNaN(parsed)) {
+      // Accept a decimal comma too ("21,5"), as typed in many locales.
+      const parsed = Number(raw.replace(",", "."));
+      if (!Number.isFinite(parsed)) {
+        this._error = `"${raw}" is not a number.`;
         this._drafts.delete(cellKey);
         this.requestUpdate();
         return;
