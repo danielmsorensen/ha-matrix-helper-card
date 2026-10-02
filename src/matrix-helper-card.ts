@@ -129,38 +129,40 @@ export class MatrixHelperCard extends LitElement {
       display: flex;
       flex-direction: column;
     }
-    /* Matches how HA's own tile card isolates its whole-card tap/ripple
-       area from independently-interactive content: a separate, absolutely
-       positioned sibling behind the visible content, rather than binding
-       the action handler to an ancestor of the interactive elements. The
-       content layer is pointer-events: none so clicks on non-interactive
-       areas (padding, header text, table borders) pass through to it;
-       .cell explicitly re-enables pointer-events so each input stays
-       independently clickable/editable without triggering the card's own
-       tap/hold/double-tap action or its hover/ripple effect. */
+    /* The tap/hold/double-tap actions and their hover/ripple belong to the
+       header strip only, so the highlighted area is exactly the clickable
+       one. The grid can't share them: its frozen labels need an opaque
+       background (hiding a card-wide hover tint) and its scroll area must
+       take pointer events itself. Same structure as HA's tile card: an
+       absolutely positioned layer behind non-interactive content. */
+    .header-row {
+      position: relative;
+      flex: none;
+    }
     .background {
       position: absolute;
       inset: 0;
-      border-radius: var(--ha-card-border-radius, 12px);
+      border-radius: var(--ha-card-border-radius, 12px)
+        var(--ha-card-border-radius, 12px) 0 0;
       overflow: hidden;
     }
     .background.pointer {
       cursor: pointer;
     }
-    .content {
+    .header {
       position: relative;
       pointer-events: none;
-      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 16px 12px;
+    }
+    .content {
+      padding: 0 16px 16px;
       flex: 1;
       min-height: 0;
       display: flex;
       flex-direction: column;
-    }
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
     }
     .header ha-state-icon {
       --mdc-icon-size: 24px;
@@ -170,7 +172,6 @@ export class MatrixHelperCard extends LitElement {
       overflow: auto;
       flex: 1;
       min-height: 0;
-      pointer-events: auto;
     }
     table {
       border-collapse: collapse;
@@ -212,7 +213,6 @@ export class MatrixHelperCard extends LitElement {
     ha-input.cell {
       width: 96px;
       margin: 0 auto;
-      pointer-events: auto;
     }
   `;
 
@@ -307,20 +307,20 @@ export class MatrixHelperCard extends LitElement {
 
     return html`
       <ha-card>
-        <div
-          class=${classMap({ background: true, pointer: hasCardAction })}
-          tabindex=${hasCardAction ? "0" : nothing}
-          role=${hasCardAction ? "button" : nothing}
-          aria-label=${hasCardAction ? title : nothing}
-          @action=${this._handleAction}
-          ${actionHandler({
-            hasHold: hasAction(this.config.hold_action),
-            hasDoubleClick: hasAction(this.config.double_tap_action),
-          })}
-        >
-          <ha-ripple .disabled=${!hasCardAction}></ha-ripple>
-        </div>
-        <div class="content">
+        <div class="header-row">
+          <div
+            class=${classMap({ background: true, pointer: hasCardAction })}
+            tabindex=${hasCardAction ? "0" : nothing}
+            role=${hasCardAction ? "button" : nothing}
+            aria-label=${hasCardAction ? title : nothing}
+            @action=${this._handleAction}
+            ${actionHandler({
+              hasHold: hasAction(this.config.hold_action),
+              hasDoubleClick: hasAction(this.config.double_tap_action),
+            })}
+          >
+            <ha-ripple .disabled=${!hasCardAction}></ha-ripple>
+          </div>
           <div class="header">
             <ha-state-icon
               style=${iconColor ? `color: ${iconColor}` : ""}
@@ -340,6 +340,8 @@ export class MatrixHelperCard extends LitElement {
                 : nothing}
             </ha-tile-info>
           </div>
+        </div>
+        <div class="content">
           ${this._error
             ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
             : ""}
