@@ -182,68 +182,67 @@ export class MatrixHelperCard extends LitElement {
       --mdc-icon-size: 24px;
       color: var(--state-icon-color, var(--secondary-text-color));
     }
-    .table-wrapper {
-      overflow: auto;
+    /* Frozen panes, spreadsheet-style: a corner, a column-label strip, a
+       row-label strip and the scrolling body. The label strips are clipped
+       and follow the body's scroll (see _syncPanes) rather than overlaying
+       it, so nothing ever scrolls underneath them. That way they need no
+       background of their own, and the ripple behind shows through them
+       exactly as it does everywhere else on the card, with any theme. */
+    .grid {
       flex: 1;
       min-height: 0;
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      --row-height: 40px;
     }
-    table {
-      border-collapse: collapse;
-      width: 100%;
+    .column-labels,
+    .row-labels {
+      overflow: hidden;
     }
-    th,
-    td {
-      padding: 4px 8px;
-      text-align: center;
+    /* Same width as the body's content area, so its columns line up with
+       the body's when the body shows a vertical scrollbar. */
+    .column-labels {
+      padding-inline-end: var(--scrollbar-width, 0px);
     }
-    th {
+    .body {
+      overflow: auto;
+    }
+    .column-track,
+    .body-track {
+      display: grid;
+      grid-template-columns: repeat(var(--columns), minmax(112px, 1fr));
+    }
+    .row-track,
+    .body-track {
+      grid-auto-rows: var(--row-height);
+    }
+    .row-track {
+      display: grid;
+    }
+    .label {
       font-weight: 500;
       color: var(--secondary-text-color);
+      padding: 4px 8px;
     }
-    th:first-child,
-    td:first-child {
-      text-align: left;
+    .column-labels .label {
+      text-align: center;
+      overflow-wrap: anywhere;
+      align-self: end;
     }
-    /* Frozen header row and label column, spreadsheet-style, so a large
-       matrix never scrolls a cell's row/column label out of view. The
-       corner cell is sticky on both axes, so it needs to sit above both the
-       header row and the label column where they'd otherwise overlap. */
-    thead th {
-      position: sticky;
-      top: 0;
-      background: var(--card-background-color);
-      z-index: 1;
+    .row-labels .label {
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
     }
-    th:first-child,
-    td:first-child {
-      position: sticky;
-      left: 0;
-      background: var(--card-background-color);
-      z-index: 1;
-    }
-    thead th:first-child {
-      z-index: 2;
-    }
-    /* The frozen labels' opaque backgrounds hide the ripple behind them, so
-       they draw the same hover tint themselves, from the same variables
-       ha-ripple's own hover layer uses. */
-    thead th::after,
-    tbody th::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: var(--ha-ripple-hover-color, var(--ha-ripple-color, var(--secondary-text-color)));
-      opacity: 0;
-      transition: opacity 15ms linear;
-    }
-    .container.interactive.hovered:not(.no-hover) thead th::after,
-    .container.interactive.hovered:not(.no-hover) tbody th::after {
-      opacity: var(--ha-ripple-hover-opacity, 0.08);
+    .slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
     }
     ha-input.cell {
       width: 96px;
-      margin: 0 auto;
       cursor: text;
     }
   `;
@@ -257,7 +256,28 @@ export class MatrixHelperCard extends LitElement {
       this._componentsRequested = true;
       ensureHaFormComponentsLoaded(this.hass).then(() => this.requestUpdate());
     }
+    const body = this.renderRoot.querySelector(".body");
+    if (body !== this._observedBody) {
+      this._resizeObserver.disconnect();
+      if (body) {
+        this._resizeObserver.observe(body);
+      }
+      this._observedBody = body;
+    }
+    this._syncPanes();
   }
+
+  public disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._resizeObserver.disconnect();
+    this._observedBody = null;
+  }
+
+  // A resize can add or remove the body's scrollbars, changing the width
+  // the column labels must match.
+  private _resizeObserver = new ResizeObserver(() => this._syncPanes());
+
+  private _observedBody: Element | null = null;
 
   public setConfig(config: MatrixHelperCardConfig): void {
     if (!config.entity || computeDomain(config.entity) !== DOMAIN) {
@@ -327,6 +347,8 @@ export class MatrixHelperCard extends LitElement {
       (this.hass as HomeAssistantWithFormatters).formatEntityName?.(stateObj, this.config.name) ??
       stateObj.attributes.friendly_name;
     const iconColor = computeIconColor(this.config.color);
+    const rowNames = rows.map((row, i) => row_labels?.[i] ?? deslugify(row));
+    const columnNames = columns.map((column, i) => column_labels?.[i] ?? deslugify(column));
 
     // tap defaults to "more-info" when unset, so an unset tap_action still
     // counts as "has an action"; hold/double-tap have no default action, so
@@ -381,79 +403,123 @@ export class MatrixHelperCard extends LitElement {
             ${this._error
               ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
               : ""}
-            <div
-              class="table-wrapper"
-              @mousedown=${this._isolateScrollbar}
-              @pointerdown=${this._isolateScrollbar}
-              @click=${this._isolateScrollbar}
-            >
-              <table>
-                <thead>
-                  <tr>
-                    <th></th>
-                    ${columns.map(
-                      (column, i) => html`<th>${column_labels?.[i] ?? deslugify(column)}</th>`
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows.map(
-                    (row, i) => html`
-                    <tr>
-                      <th>${row_labels?.[i] ?? deslugify(row)}</th>
-                      ${columns.map((column) => {
-                        const cellKey = `${row}:${column}`;
-                        const committedValue = data[row]?.[column] ?? null;
-                        const displayValue = this._drafts.has(cellKey)
-                          ? this._drafts.get(cellKey)!
-                          : committedValue === null
-                            ? ""
-                            : String(committedValue);
-                        return html`<td>
-                          <ha-input
-                            class="cell"
-                            appearance="outlined"
-                            type="text"
-                            inputmode="decimal"
-                            .value=${displayValue}
-                            @input=${(ev: Event) => {
-                              this._drafts.set(cellKey, eventValue(ev));
-                              this.requestUpdate();
-                            }}
-                            @mousedown=${this._isolateCell}
-                            @touchstart=${this._isolateCell}
-                            @touchend=${this._isolateCell}
-                            @pointerdown=${this._isolateCell}
-                            @click=${this._isolateCell}
-                            @keydown=${(ev: KeyboardEvent) => {
-                              this._isolateCell(ev);
-                              if (ev.key === "Escape") {
-                                // Discard the edit; with no draft left, the
-                                // blur's "change" below is a no-op.
-                                this._drafts.delete(cellKey);
-                                this.requestUpdate();
-                              }
-                              if (ev.key === "Enter" || ev.key === "Escape") {
-                                // blur() reliably fires ha-input's native
-                                // "change" below, which commits the edit --
-                                // no separate direct call needed here.
-                                (ev.target as HTMLElement).blur();
-                              }
-                            }}
-                            @change=${() => this._commitCell(row, column, committedValue)}
-                          ></ha-input>
-                        </td>`;
-                      })}
-                    </tr>
-                  `
+            <div class="grid" style=${`--columns: ${columns.length}`}>
+              <div class="corner"></div>
+              <div class="column-labels" @wheel=${this._forwardWheel}>
+                <div class="column-track">
+                  ${columnNames.map((name) => html`<div class="label">${name}</div>`)}
+                </div>
+              </div>
+              <div class="row-labels" @wheel=${this._forwardWheel}>
+                <div class="row-track">
+                  ${rowNames.map((name) => html`<div class="label">${name}</div>`)}
+                </div>
+              </div>
+              <div
+                class="body"
+                @scroll=${this._syncPanes}
+                @mousedown=${this._isolateScrollbar}
+                @pointerdown=${this._isolateScrollbar}
+                @click=${this._isolateScrollbar}
+              >
+                <div class="body-track">
+                  ${rows.map((row, i) =>
+                    columns.map((column, j) =>
+                      this._renderCell(data, row, column, `${rowNames[i]}, ${columnNames[j]}`)
+                    )
                   )}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </ha-card>
     `;
+  }
+
+  private _renderCell(
+    data: Record<string, Record<string, number | null>>,
+    row: string,
+    column: string,
+    label: string
+  ) {
+    const cellKey = `${row}:${column}`;
+    const committedValue = data[row]?.[column] ?? null;
+    const displayValue = this._drafts.has(cellKey)
+      ? this._drafts.get(cellKey)!
+      : committedValue === null
+        ? ""
+        : String(committedValue);
+    return html`<div class="slot">
+      <ha-input
+        class="cell"
+        appearance="outlined"
+        type="text"
+        inputmode="decimal"
+        aria-label=${label}
+        .value=${displayValue}
+        @input=${(ev: Event) => {
+          this._drafts.set(cellKey, eventValue(ev));
+          this.requestUpdate();
+        }}
+        @mousedown=${this._isolateCell}
+        @touchstart=${this._isolateCell}
+        @touchend=${this._isolateCell}
+        @pointerdown=${this._isolateCell}
+        @click=${this._isolateCell}
+        @keydown=${(ev: KeyboardEvent) => {
+          this._isolateCell(ev);
+          if (ev.key === "Escape") {
+            // Discard the edit; with no draft left, the blur's "change"
+            // below is a no-op.
+            this._drafts.delete(cellKey);
+            this.requestUpdate();
+          }
+          if (ev.key === "Enter" || ev.key === "Escape") {
+            // blur() reliably fires ha-input's native "change" below, which
+            // commits the edit -- no separate direct call needed here.
+            (ev.target as HTMLElement).blur();
+          }
+        }}
+        @change=${() => this._commitCell(row, column, committedValue)}
+      ></ha-input>
+    </div>`;
+  }
+
+  // Moves the label strips with the body's scroll, and keeps the column
+  // labels the same width as the body's content area (which a vertical
+  // scrollbar narrows). Set directly, not via state, so scrolling never
+  // re-renders the grid.
+  private _syncPanes = (): void => {
+    const root = this.renderRoot;
+    const body = root.querySelector<HTMLElement>(".body");
+    if (!body) {
+      return;
+    }
+    root
+      .querySelector<HTMLElement>(".grid")!
+      .style.setProperty("--scrollbar-width", `${body.offsetWidth - body.clientWidth}px`);
+    root.querySelector<HTMLElement>(".column-track")!.style.transform =
+      `translateX(${-body.scrollLeft}px)`;
+    root.querySelector<HTMLElement>(".row-track")!.style.transform =
+      `translateY(${-body.scrollTop}px)`;
+  };
+
+  // The label strips are clipped rather than scrollable, so a wheel over
+  // them would otherwise scroll the page instead of the grid.
+  private _forwardWheel(ev: WheelEvent): void {
+    const body = this.renderRoot.querySelector<HTMLElement>(".body");
+    if (!body) {
+      return;
+    }
+    const unit = ev.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+    const [dx, dy] =
+      ev.shiftKey && !ev.deltaX ? [ev.deltaY, 0] : [ev.deltaX, ev.deltaY];
+    const { scrollLeft, scrollTop } = body;
+    body.scrollBy(dx * unit, dy * unit);
+    if (body.scrollLeft !== scrollLeft || body.scrollTop !== scrollTop) {
+      ev.preventDefault();
+    }
   }
 
   // Keeps a cell's own pointer/key events from reaching the container's
@@ -469,7 +535,7 @@ export class MatrixHelperCard extends LitElement {
   private _isOnScrollbar(ev: MouseEvent): boolean {
     const el = ev.target as HTMLElement;
     return (
-      el.classList?.contains("table-wrapper") &&
+      el.classList?.contains("body") &&
       (ev.offsetX >= el.clientWidth || ev.offsetY >= el.clientHeight)
     );
   }
