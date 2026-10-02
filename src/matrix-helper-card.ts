@@ -129,33 +129,45 @@ export class MatrixHelperCard extends LitElement {
       display: flex;
       flex-direction: column;
     }
-    /* The tap/hold/double-tap actions and their hover/ripple belong to the
-       header strip only, so the highlighted area is exactly the clickable
-       one. The grid can't share them: its frozen labels need an opaque
-       background (hiding a card-wide hover tint) and its scroll area must
-       take pointer events itself. Same structure as HA's tile card: an
-       absolutely positioned layer behind non-interactive content. */
-    .header-row {
+    /* Like HA's tile card, the whole card is the tap/hold/double-tap target
+       and shows the hover/ripple, except the cell inputs. Unlike tile, the
+       grid scrolls, so its content can't be made click-through; instead the
+       action handler and ripple live on .container, an ancestor of the
+       grid, and each cell stops its own pointer/key events from reaching
+       them (see _isolateCell). */
+    .container {
       position: relative;
-      flex: none;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
-    .background {
-      position: absolute;
-      inset: 0;
-      border-radius: var(--ha-card-border-radius, 12px)
-        var(--ha-card-border-radius, 12px) 0 0;
-      overflow: hidden;
-    }
-    .background.pointer {
+    .container.interactive {
       cursor: pointer;
     }
+    /* An overlay above the frozen labels (z-index 1-2), so their opaque
+       backgrounds don't hide the hover tint. The ripple ignores pointer
+       events itself, and is switched off while the pointer is over a cell. */
+    ha-ripple {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      border-radius: var(--ha-card-border-radius, 12px);
+    }
+    .container.over-cell ha-ripple {
+      --ha-ripple-hover-opacity: 0;
+    }
     .header {
-      position: relative;
-      pointer-events: none;
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 16px 16px 12px;
+      border-radius: var(--ha-card-border-radius, 12px)
+        var(--ha-card-border-radius, 12px) 0 0;
+    }
+    .header:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: -2px;
     }
     .content {
       padding: 0 16px 16px;
@@ -213,6 +225,7 @@ export class MatrixHelperCard extends LitElement {
     ha-input.cell {
       width: 96px;
       margin: 0 auto;
+      cursor: text;
     }
   `;
 
@@ -307,21 +320,25 @@ export class MatrixHelperCard extends LitElement {
 
     return html`
       <ha-card>
-        <div class="header-row">
+        <div
+          class=${classMap({ container: true, interactive: hasCardAction })}
+          @action=${this._handleAction}
+          @pointerover=${this._trackCellHover}
+          @pointerleave=${this._trackCellHover}
+          ${actionHandler({
+            hasHold: hasAction(this.config.hold_action),
+            hasDoubleClick: hasAction(this.config.double_tap_action),
+          })}
+        >
+          <ha-ripple .disabled=${!hasCardAction}></ha-ripple>
+          <!-- The header is the card's keyboard-focusable button; its
+               Enter/Space keydown bubbles to the container's handler. -->
           <div
-            class=${classMap({ background: true, pointer: hasCardAction })}
+            class="header"
             tabindex=${hasCardAction ? "0" : nothing}
             role=${hasCardAction ? "button" : nothing}
             aria-label=${hasCardAction ? title : nothing}
-            @action=${this._handleAction}
-            ${actionHandler({
-              hasHold: hasAction(this.config.hold_action),
-              hasDoubleClick: hasAction(this.config.double_tap_action),
-            })}
           >
-            <ha-ripple .disabled=${!hasCardAction}></ha-ripple>
-          </div>
-          <div class="header">
             <ha-state-icon
               style=${iconColor ? `color: ${iconColor}` : ""}
               .icon=${this.config.icon}
@@ -340,72 +357,96 @@ export class MatrixHelperCard extends LitElement {
                 : nothing}
             </ha-tile-info>
           </div>
-        </div>
-        <div class="content">
-          ${this._error
-            ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-            : ""}
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th></th>
-                  ${columns.map(
-                    (column, i) => html`<th>${column_labels?.[i] ?? deslugify(column)}</th>`
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                ${rows.map(
-                  (row, i) => html`
+          <div class="content">
+            ${this._error
+              ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+              : ""}
+            <div class="table-wrapper">
+              <table>
+                <thead>
                   <tr>
-                    <th>${row_labels?.[i] ?? deslugify(row)}</th>
-                    ${columns.map((column) => {
-                      const cellKey = `${row}:${column}`;
-                      const committedValue = data[row]?.[column] ?? null;
-                      const displayValue = this._drafts.has(cellKey)
-                        ? this._drafts.get(cellKey)!
-                        : committedValue === null
-                          ? ""
-                          : String(committedValue);
-                      return html`<td>
-                        <ha-input
-                          class="cell"
-                          appearance="outlined"
-                          type="text"
-                          inputmode="decimal"
-                          .value=${displayValue}
-                          @input=${(ev: Event) => {
-                            this._drafts.set(cellKey, eventValue(ev));
-                            this.requestUpdate();
-                          }}
-                          @keydown=${(ev: KeyboardEvent) => {
-                            if (ev.key === "Escape") {
-                              // Discard the edit; with no draft left, the
-                              // blur's "change" below is a no-op.
-                              this._drafts.delete(cellKey);
-                              this.requestUpdate();
-                            }
-                            if (ev.key === "Enter" || ev.key === "Escape") {
-                              // blur() reliably fires ha-input's native
-                              // "change" below, which commits the edit --
-                              // no separate direct call needed here.
-                              (ev.target as HTMLElement).blur();
-                            }
-                          }}
-                          @change=${() => this._commitCell(row, column, committedValue)}
-                        ></ha-input>
-                      </td>`;
-                    })}
+                    <th></th>
+                    ${columns.map(
+                      (column, i) => html`<th>${column_labels?.[i] ?? deslugify(column)}</th>`
+                    )}
                   </tr>
-                `
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  ${rows.map(
+                    (row, i) => html`
+                    <tr>
+                      <th>${row_labels?.[i] ?? deslugify(row)}</th>
+                      ${columns.map((column) => {
+                        const cellKey = `${row}:${column}`;
+                        const committedValue = data[row]?.[column] ?? null;
+                        const displayValue = this._drafts.has(cellKey)
+                          ? this._drafts.get(cellKey)!
+                          : committedValue === null
+                            ? ""
+                            : String(committedValue);
+                        return html`<td>
+                          <ha-input
+                            class="cell"
+                            appearance="outlined"
+                            type="text"
+                            inputmode="decimal"
+                            .value=${displayValue}
+                            @input=${(ev: Event) => {
+                              this._drafts.set(cellKey, eventValue(ev));
+                              this.requestUpdate();
+                            }}
+                            @mousedown=${this._isolateCell}
+                            @touchstart=${this._isolateCell}
+                            @touchend=${this._isolateCell}
+                            @pointerdown=${this._isolateCell}
+                            @click=${this._isolateCell}
+                            @keydown=${(ev: KeyboardEvent) => {
+                              this._isolateCell(ev);
+                              if (ev.key === "Escape") {
+                                // Discard the edit; with no draft left, the
+                                // blur's "change" below is a no-op.
+                                this._drafts.delete(cellKey);
+                                this.requestUpdate();
+                              }
+                              if (ev.key === "Enter" || ev.key === "Escape") {
+                                // blur() reliably fires ha-input's native
+                                // "change" below, which commits the edit --
+                                // no separate direct call needed here.
+                                (ev.target as HTMLElement).blur();
+                              }
+                            }}
+                            @change=${() => this._commitCell(row, column, committedValue)}
+                          ></ha-input>
+                        </td>`;
+                      })}
+                    </tr>
+                  `
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </ha-card>
     `;
+  }
+
+  // Keeps a cell's own pointer/key events from reaching the container's
+  // action handler and ripple, so editing a cell never triggers the card's
+  // tap/hold/double-tap action.
+  private _isolateCell(ev: Event): void {
+    ev.stopPropagation();
+  }
+
+  // Turns the container's hover tint off while the pointer is over a cell,
+  // matching how hovering a tile card's feature control doesn't tint the
+  // card. Toggled directly rather than via state, to avoid re-rendering the
+  // whole grid on every pointer move.
+  private _trackCellHover(ev: PointerEvent): void {
+    const overCell =
+      ev.type === "pointerover" &&
+      (ev.target as Element).closest?.("ha-input.cell") != null;
+    (ev.currentTarget as HTMLElement).classList.toggle("over-cell", overCell);
   }
 
   private _handleAction(ev: ActionHandlerEvent): void {
