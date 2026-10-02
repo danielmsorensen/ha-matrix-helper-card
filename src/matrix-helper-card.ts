@@ -130,13 +130,15 @@ export class MatrixHelperCard extends LitElement {
       flex-direction: column;
     }
     /* Like HA's tile card, the whole card is the tap/hold/double-tap target
-       and shows the hover/ripple, except the cell inputs. Unlike tile, the
-       grid scrolls, so its content can't be made click-through; instead the
-       action handler and ripple live on .container, an ancestor of the
-       grid, and each cell stops its own pointer/key events from reaching
-       them (see _isolateCell). */
+       and shows the hover/ripple, except the cell inputs -- and, since this
+       card scrolls, the scrollbar. Unlike tile, the grid has to take pointer
+       events to scroll, so its content can't be made click-through; instead
+       the action handler and ripple live on .container, an ancestor of the
+       grid, and cells and the scrollbar stop their own pointer/key events
+       from reaching them (see _isolateCell / _isolateScrollbar). */
     .container {
       position: relative;
+      isolation: isolate;
       flex: 1;
       min-height: 0;
       display: flex;
@@ -145,16 +147,16 @@ export class MatrixHelperCard extends LitElement {
     .container.interactive {
       cursor: pointer;
     }
-    /* An overlay above the frozen labels (z-index 1-2), so their opaque
-       backgrounds don't hide the hover tint. The ripple ignores pointer
-       events itself, and is switched off while the pointer is over a cell. */
+    /* Behind the content, as on tile, so the cells -- whose outlined fields
+       are already opaque -- are never tinted. Its hover is switched off while
+       the pointer is over a cell or the scrollbar (see _trackHover). */
     ha-ripple {
       position: absolute;
       inset: 0;
-      z-index: 3;
+      z-index: -1;
       border-radius: var(--ha-card-border-radius, 12px);
     }
-    .container.over-cell ha-ripple {
+    .container.no-hover ha-ripple {
       --ha-ripple-hover-opacity: 0;
     }
     .header {
@@ -221,6 +223,23 @@ export class MatrixHelperCard extends LitElement {
     }
     thead th:first-child {
       z-index: 2;
+    }
+    /* The frozen labels' opaque backgrounds hide the ripple behind them, so
+       they draw the same hover tint themselves, from the same variables
+       ha-ripple's own hover layer uses. */
+    thead th::after,
+    tbody th::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: var(--ha-ripple-hover-color, var(--ha-ripple-color, var(--secondary-text-color)));
+      opacity: 0;
+      transition: opacity 15ms linear;
+    }
+    .container.interactive.hovered:not(.no-hover) thead th::after,
+    .container.interactive.hovered:not(.no-hover) tbody th::after {
+      opacity: var(--ha-ripple-hover-opacity, 0.08);
     }
     ha-input.cell {
       width: 96px;
@@ -323,8 +342,9 @@ export class MatrixHelperCard extends LitElement {
         <div
           class=${classMap({ container: true, interactive: hasCardAction })}
           @action=${this._handleAction}
-          @pointerover=${this._trackCellHover}
-          @pointerleave=${this._trackCellHover}
+          @pointerenter=${this._trackHover}
+          @pointermove=${this._trackHover}
+          @pointerleave=${this._trackHover}
           ${actionHandler({
             hasHold: hasAction(this.config.hold_action),
             hasDoubleClick: hasAction(this.config.double_tap_action),
@@ -361,7 +381,12 @@ export class MatrixHelperCard extends LitElement {
             ${this._error
               ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
               : ""}
-            <div class="table-wrapper">
+            <div
+              class="table-wrapper"
+              @mousedown=${this._isolateScrollbar}
+              @pointerdown=${this._isolateScrollbar}
+              @click=${this._isolateScrollbar}
+            >
               <table>
                 <thead>
                   <tr>
@@ -438,15 +463,48 @@ export class MatrixHelperCard extends LitElement {
     ev.stopPropagation();
   }
 
-  // Turns the container's hover tint off while the pointer is over a cell,
-  // matching how hovering a tile card's feature control doesn't tint the
-  // card. Toggled directly rather than via state, to avoid re-rendering the
+  // Whether the pointer is over the grid's own scrollbar rather than its
+  // content: scrollbar events target the scroll container itself, at an
+  // offset beyond its client (content) area.
+  private _isOnScrollbar(ev: MouseEvent): boolean {
+    const el = ev.target as HTMLElement;
+    return (
+      el.classList?.contains("table-wrapper") &&
+      (ev.offsetX >= el.clientWidth || ev.offsetY >= el.clientHeight)
+    );
+  }
+
+  private _scrollbarPressed = false;
+
+  // Keeps presses on the scrollbar from reaching the container's action
+  // handler and ripple. The click that follows a scrollbar drag can land on
+  // the content, so it's matched to its press rather than its position.
+  private _isolateScrollbar(ev: MouseEvent): void {
+    if (ev.type === "click") {
+      if (this._scrollbarPressed || this._isOnScrollbar(ev)) {
+        ev.stopPropagation();
+      }
+      this._scrollbarPressed = false;
+    } else if (this._isOnScrollbar(ev)) {
+      this._scrollbarPressed = true;
+      ev.stopPropagation();
+    }
+  }
+
+  // Tracks hover for the frozen labels' tint, and turns the whole hover
+  // effect off while the pointer is over a cell or the scrollbar -- as
+  // hovering a tile card's feature control doesn't tint the card. Classes
+  // are toggled directly rather than via state, to avoid re-rendering the
   // whole grid on every pointer move.
-  private _trackCellHover(ev: PointerEvent): void {
-    const overCell =
-      ev.type === "pointerover" &&
-      (ev.target as Element).closest?.("ha-input.cell") != null;
-    (ev.currentTarget as HTMLElement).classList.toggle("over-cell", overCell);
+  private _trackHover(ev: PointerEvent): void {
+    const container = ev.currentTarget as HTMLElement;
+    if (ev.type === "pointerleave" || ev.pointerType === "touch") {
+      container.classList.remove("hovered", "no-hover");
+      return;
+    }
+    const overCell = (ev.target as Element).closest?.("ha-input.cell") != null;
+    container.classList.add("hovered");
+    container.classList.toggle("no-hover", overCell || this._isOnScrollbar(ev));
   }
 
   private _handleAction(ev: ActionHandlerEvent): void {
