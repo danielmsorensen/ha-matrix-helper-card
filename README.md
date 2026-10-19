@@ -7,6 +7,8 @@ nudging one room's temperature in a climate profile.
 **Requires the Matrix Helper integration, version 1.1.0 or later**, installed first —
 see [danielmsorensen/ha-matrix-helper](https://github.com/danielmsorensen/ha-matrix-helper).
 
+![A Matrix Helper card showing climate profiles as rows and rooms as columns, with target temperatures in editable cells](https://raw.githubusercontent.com/danielmsorensen/ha-matrix-helper-card/main/docs/images/card.png)
+
 ## Features
 
 - Edit any cell in place: type a value and press Enter (or click away). Empty the
@@ -51,6 +53,8 @@ entity: matrix_helper.climate_profiles
 All other options (`name`, `icon`, `color`, `state_content`, `tap_action`,
 `hold_action`, `double_tap_action`) are set from the visual editor and work like
 their counterparts on Home Assistant's built-in cards.
+
+![The card's visual editor, with Content and Interactions sections beside a live preview](https://raw.githubusercontent.com/danielmsorensen/ha-matrix-helper-card/main/docs/images/card-editor.png)
 
 ## Development
 
